@@ -38,7 +38,6 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
         // --- CONFIGURATION STATIQUE (DROPBOX UNIQUEMENT) ---
-        // Remplissez ceci pour une connexion automatique sur tous les appareils (Optionnel)
         const HARDCODED_DBX_TOKEN = ""; // Ex: "sl.BHz..."
 
         // --- CITATIONS ---
@@ -205,7 +204,8 @@
             const [searchQuery, setSearchQuery] = useState('');
             const [syncLog, setSyncLog] = useState('');
             const [syncStatus, setSyncStatus] = useState('idle');
-            const [showConfigModal, setShowConfigModal] = useState(false);
+            const [showRestoreModal, setShowRestoreModal] = useState(false); // Modal "Première Connexion"
+            const [restoreToken, setRestoreToken] = useState('');
             const [isUploading, setIsUploading] = useState(false);
             const [showQuoteModal, setShowQuoteModal] = useState(false); // Modal Citation
             const [currentQuote, setCurrentQuote] = useState(null);
@@ -235,7 +235,6 @@
                     const parsedConfig = JSON.parse(storedConfig);
                     // Priorité au token hardcodé si présent
                     if(HARDCODED_DBX_TOKEN) parsedConfig.token = HARDCODED_DBX_TOKEN;
-                    // On ne force PAS la clé Gemini, elle doit venir du localStorage ou être entrée
                     setDbxConfig(parsedConfig);
                 }
                 if (storedUsers) setUsers(JSON.parse(storedUsers));
@@ -284,12 +283,15 @@
             };
 
             // --- FONCTION DE CHARGEMENT / RESTAURATION ---
-            const loadCloudDatabase = async () => {
-                if (!dbxConfig.token) return;
+            const loadCloudDatabase = async (overrideToken = null) => {
+                const tokenToUse = overrideToken || dbxConfig.token;
+                if (!tokenToUse) return;
+                
                 setSyncStatus('working');
                 setSyncLog("Restauration depuis le Cloud...");
+                
                 try {
-                    const blob = await dbxDownloadFile(dbxConfig.token, '/db_tarifs.json');
+                    const blob = await dbxDownloadFile(tokenToUse, '/db_tarifs.json');
                     const text = await blob.text();
                     const data = JSON.parse(text);
                     
@@ -298,16 +300,58 @@
                     if (data.history) setDbHistory(data.history);
                     if (data.users && Array.isArray(data.users)) {
                         setUsers(data.users);
-                        const updatedCurrentUser = data.users.find(u => u.id === currentUser.id);
-                        if(updatedCurrentUser) setCurrentUser(updatedCurrentUser);
+                        // Force la sauvegarde locale des utilisateurs restaurés
+                        localStorage.setItem('tdbx_users', JSON.stringify(data.users));
+                        
+                        // Si l'utilisateur courant a été mis à jour, on met à jour la session
+                        if(currentUser) {
+                            const updatedCurrentUser = data.users.find(u => u.id === currentUser.id);
+                            if(updatedCurrentUser) setCurrentUser(updatedCurrentUser);
+                        }
                     }
 
                     setSyncLog("✅ Données et utilisateurs restaurés avec succès.");
                     setSyncStatus('success');
+                    return true;
                 } catch (e) {
                     console.error(e);
                     setSyncLog("⚠️ Aucune sauvegarde trouvée ou erreur : " + e.message);
                     setSyncStatus('error');
+                    return false;
+                }
+            };
+
+            // --- EXPORT LOCAL & CLOUD MANUEL ---
+            const handleLocalExport = () => {
+                const dataToExport = {
+                    exportDate: new Date().toLocaleString(),
+                    history: dbHistory,
+                    tarifs: tarifs,
+                    fiches: fiches,
+                    users: users
+                };
+                const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `backup_tarifiers_dbx_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+
+            const handleManualCloudSave = async () => {
+                setSyncStatus('working');
+                setSyncLog("Sauvegarde manuelle vers le Cloud...");
+                try {
+                    await saveToCloud(); // Utilise l'état courant
+                    setSyncLog("✅ Sauvegarde Cloud effectuée avec succès.");
+                    setSyncStatus('success');
+                    alert("Base de données publiée sur le Cloud ! Les utilisateurs la recevront à leur prochaine connexion.");
+                } catch (e) {
+                    setSyncLog("❌ Erreur Sauvegarde Cloud : " + e.message);
+                    setSyncStatus('error');
+                    alert("Erreur : " + e.message);
                 }
             };
 
@@ -333,6 +377,30 @@
                     }
                 } else {
                     setLoginError('Identifiants incorrects');
+                }
+            };
+
+            const handleFirstConnection = async () => {
+                if(!restoreToken) return alert("Veuillez entrer un Token Dropbox valide.");
+                
+                setSyncStatus('working'); // Indicateur visuel (optionnel ici, car on est sur le login)
+                
+                try {
+                    // 1. Tenter de charger la DB avec ce token
+                    const success = await loadCloudDatabase(restoreToken);
+                    if (success) {
+                        // 2. Si succès, sauvegarder le token et fermer
+                        setDbxConfig(prev => ({ ...prev, token: restoreToken }));
+                        // Sauvegarder la config dans le localStorage pour persister le token
+                        localStorage.setItem('tdbx_config', JSON.stringify({ ...dbxConfig, token: restoreToken }));
+                        
+                        alert("Restauration réussie ! Vous pouvez maintenant vous connecter avec vos identifiants.");
+                        setShowRestoreModal(false);
+                    } else {
+                        alert("Impossible de récupérer la base de données. Vérifiez le token ou si le fichier 'db_tarifs.json' existe sur Dropbox.");
+                    }
+                } catch(e) {
+                    alert("Erreur: " + e.message);
                 }
             };
 
@@ -378,7 +446,7 @@
                 
                 try {
                     await saveToCloud(null, null, null, updatedUsers);
-                    alert("Utilisateur enregistré et synchronisé !");
+                    alert("Utilisateur enregistré et synchronisé sur le Cloud !");
                 } catch(err) {
                     alert("Utilisateur local ok, mais erreur sync cloud : " + err.message);
                 }
@@ -604,6 +672,11 @@
                             <input type="password" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} placeholder="Mot de passe" />
                             <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all transform active:scale-95 mt-2">Se Connecter</button>
                         </form>
+                        <div className="mt-6 pt-4 border-t border-slate-200 text-center">
+                            <button onClick={() => setShowRestoreModal(true)} className="text-xs font-bold text-blue-500 hover:text-blue-700 hover:underline flex items-center justify-center gap-1 mx-auto">
+                                <Icon name="DownloadCloud" size={14}/> Première Connexion / Restauration
+                            </button>
+                        </div>
                     </div>
                 </div>
             );
@@ -625,14 +698,31 @@
                         </div>
                     )}
 
-                    {/* MODAL CONFIG (RESTAURATION) */}
-                    {showConfigModal && (
-                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full animate-fade">
-                                <h2 className="text-xl font-bold mb-2">Restauration Cloud</h2>
-                                <p className="text-slate-500 text-sm mb-6">Nouvel appareil détecté. Entrez le Token pour restaurer vos données et utilisateurs.</p>
-                                <input type="password" placeholder="Token Dropbox..." className="w-full p-3 border rounded-xl mb-4 text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500" value={dbxConfig.token} onChange={e => setDbxConfig({...dbxConfig, token: e.target.value})} />
-                                <button onClick={() => { if(dbxConfig.token) { setShowConfigModal(false); loadCloudDatabase(); } }} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Valider & Restaurer</button>
+                    {/* MODAL RESTAURATION (Première Connexion) */}
+                    {showRestoreModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-fade">
+                            <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full relative">
+                                <button onClick={() => setShowRestoreModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><Icon name="X"/></button>
+                                <div className="text-center mb-6">
+                                    <div className="inline-flex p-3 bg-indigo-100 text-indigo-600 rounded-full mb-3"><Icon name="DownloadCloud" size={24}/></div>
+                                    <h2 className="text-xl font-bold">Restauration Cloud</h2>
+                                    <p className="text-slate-500 text-sm mt-2">Pour synchroniser cet appareil, entrez le Token Dropbox de l'administrateur.</p>
+                                </div>
+                                <input 
+                                    type="password" 
+                                    placeholder="Token Dropbox (sl.BHz...)" 
+                                    className="w-full p-3 border rounded-xl mb-4 text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500" 
+                                    value={restoreToken} 
+                                    onChange={e => setRestoreToken(e.target.value)} 
+                                />
+                                <button 
+                                    onClick={handleFirstConnection} 
+                                    className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                                    disabled={syncStatus === 'working'}
+                                >
+                                    {syncStatus === 'working' ? <Icon name="Loader2" className="animate-spin"/> : <Icon name="CheckCircle"/>}
+                                    Valider et Restaurer
+                                </button>
                             </div>
                         </div>
                     )}
@@ -810,6 +900,16 @@
                                             <div className="grid gap-1"><label className="text-[10px] font-bold uppercase text-slate-400">Clé Gemini</label><input type="password" value={dbxConfig.geminiKey} onChange={e => setDbxConfig({...dbxConfig, geminiKey: e.target.value})} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono" /></div>
                                             <div className="grid gap-1"><label className="text-[10px] font-bold uppercase text-slate-400">Dossier Tarifs</label><input value={dbxConfig.pathTarifs} onChange={e => setDbxConfig({...dbxConfig, pathTarifs: e.target.value})} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs" /></div>
                                             <div className="grid gap-1"><label className="text-[10px] font-bold uppercase text-slate-400">Dossier Fiches</label><input value={dbxConfig.pathFT} onChange={e => setDbxConfig({...dbxConfig, pathFT: e.target.value})} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs" /></div>
+                                            
+                                            {/* BOUTONS SAUVEGARDE */}
+                                            <div className="pt-4 mt-4 border-t border-slate-100 flex flex-col gap-2">
+                                                <button onClick={handleManualCloudSave} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-sm">
+                                                    <Icon name="CloudUpload" size={14}/> Publier la Base sur le Cloud (MàJ)
+                                                </button>
+                                                <button onClick={handleLocalExport} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors">
+                                                    <Icon name="HardDriveDownload" size={14}/> Télécharger Backup Local (Secours)
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="bg-slate-900 text-green-400 p-5 rounded-3xl font-mono text-xs h-60 overflow-y-auto shadow-inner"><div className="opacity-50 border-b border-green-800 pb-2 mb-2">System Logs</div><div className="whitespace-pre-wrap">{syncLog || "Prêt."}</div></div>

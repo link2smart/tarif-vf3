@@ -63,8 +63,14 @@
         // Configuration PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        // --- CONFIGURATION CRITIQUE (TOKEN DE SECOURS) ---
-        // Utilisé si le Refresh Token n'est pas encore configuré
+        // --- CONFIGURATION PERMANENTE (ADMIN) ---
+        // REMPLISSEZ CES CHAMPS AVEC VOS CLÉS POUR QUE L'APP MARCHE PARTOUT SANS CONFIGURATION
+        const HARDCODED_APP_KEY = "0jxe3h5hj9vm2lk";      // Copier depuis Admin > Paramètres
+        const HARDCODED_APP_SECRET = "w39sunmc10iacrn";   // Copier depuis Admin > Paramètres
+        const HARDCODED_REFRESH_TOKEN = "sl.u.AGMbo2-eKOHp151zvskrz2zbz_cAmQPb8IR4ON0TrmDb0GviAxZtxuhlgp1Y2t05z925aRaAMgPof2DF6pmW8uc0FrBy_HwNnNXpexKJtMdM1Oa5sFbp83RFb0Mb-RKo4GkDSPyatt90HcN3BOzrwJJ9SChXuaIQT5HEh1O3IzACYeXKs-mmkW_DU2wvz1lEhzQ7zY9ProbIFcIB95ZhYN_9O4ZF5yo2iBsF1ermHSy9Mwt5wF6xbcaBzcrwx_WYLI6asaA4FN2xIUV1RCQepoNpLXeSgW7e8BYEmrn2duTwse92eoszgDymi_njRUtDOoY3abbIm5dkkPmTQSTaJAUtRcHOEQsGviciKZf_EOJUjgBHSfMKa3Tthpyz-fFp0TRoFqCU4-a8FdbgVLY7uXD0rUUT5ALyPZl1qt4yBJJrLydopzAFMJ3PRvsZ-WfvUxktaqRX6cp7RGhRccURPUNbtwiziljUse4DT4idHo6VBuZ3-ppI239DwkqUPOgxuQ9BSzZZotkc7TYdAHtON3MW-y4Sa9xtZ2QJB_reIuqykjYfjsNxLbYuBpm5QareT43ZBXeF-_GrLQb-qzYMf5q3ElXR0RMV-uVXDyd0iK0iljnFP_5LuJ16e2T5mOVVgJCeNu-MunE4eZlWcpUawx95okhqlUz9fc2pY-L3TYwZeZuL8u9XyK2cjpWud-5PXdaECikOVBdcsehx3r3Bb5OQWuc3YJLkc3urMqqUUUHuh_JhtofKmVuS5l3VEejKAO4WA1xDmqd_UCHiNYmFaj3aBBe3v7-zxtxHeGtXu27c8qvzLlL3BCmmrXxMFd06wKHSPT2qlHjHKPBRr-Vhsk_cqjY4-jJNASkjGZJ_OEPVsERIT7TQMYat7KZlANDFWlVhdNBYKHbwTFZbUy8FzR6sAHpipZkJWG_XnOgK1mFjy2P4p8pn-Qb9Vhi5jpuFReo8ZtXCyKSWPMW1vctlIokish4bYLXGOPxpFlhF-pSjLyZb9hHJUaf6yOpbRzBeuvNBAQEB9hRHA63f1ga9ZNlKoA8-m1Y_-2VmtNNoFsJu8RI-Knd1ehB5TQMu7MHU_qhq6prKrBLMB85jfLl3xG-RcoClvsyecbziFywNz5FAYV-fFt94bxkjGHI3sLc_GDUXNf1kW2vsXQsxbC-rToPK1ITvBqMHflSnAV6XWB99Nhpe5B9DF4w6QkGkQS0-JBWnvWmeHlp92rELifF-De2aoRJi7mrjDu89COQVCJjJRYoe49GBaDonDVNTppiPSgb5tJ-CaCEZnCeyPVD_-__R";// Copier depuis Admin > Paramètres (Le code long)
+        const HARDCODED_GEMINI_KEY = "";   // Votre clé IA (Facultatif si déjà sur Cloud)
+
+        // Token de secours (Utilisé uniquement si les champs ci-dessus sont vides)
         const HARDCODED_DBX_TOKEN = "sl.u.AGNfi6dpn3OFF0iwMt2YWKrXQPCBk9WhThHZjSOxyR6XwFQFfq4ZBCUQqGgyeYThtWx-clnclh4ibhqOJYq8URbMFSO7o8dH0wpsv-cvPFS4CTI_fVEgvkRu0Mstv6uATcBireQO0Nic7fGXE61r6Z0B7y7fetsR-wJLStIugVeuYrcKDylZ25HIN2_UqVaVmsGnKggLlnypRmtOPiE4wIDtK6WoQbDEJywSotHYgSkOy13jutfwMi5CXvNkScstsxrYK9B1qE6KE4YTGU5swho5u0Gs7vlmERaUbaewcQf00YkrriYj1VFV35Y4-3l15kVxpdaVpB-mtFTnY4vjYJ_EJnKRk-C9F02M6zE8wKzWJNTAbfa0Pfm1NlQRKprtv4TZcOJfR39zNgxnK96eteXIg7YCkortY122aOh9tRrq0X8z69_VO0u2NdDnYsrX8luKybf3O8YyDn4R0c7ONo1fGyrcVtfcCZ6YBWmNR-CT1TEdniGwNSokHcjYK8n_HoRTP0226FBY0CTn0ZI02usi-9C3mdkpL7o-64UOJ-BcWJj5l8MULbMSF_Schh8j58AF8ZlcCrN-PA2w3IPAtE90WfkVVSG7uQp8xCC6oR0Vh-wMQ7VdTL29tQrEJ9h9MfMk_wJvjKuV4PbgdQiVX0ATmSsbfPOdUadMDAZvJWuOMQ8khanPym-ColgE2AoU-oaMkgE93kwxUFIgWX5FwtAL77KGorowNKk9v45geF-rkGdn6Khi8w9ZhG9BjUMlfkn_cxHVzD9sh8goxXqVXsw6IYDcq2-ILIIU7F3OnlielMyFRyh1tQTOaQPZzArZ_ZmAu7hpuUInqoa3kbkH71isRpdRaeKEQvLV2tJH5h0ytyEm2WCgIwbSP3obOs6Ag4cOJGLD2gKRds6PKUGakauJE7xunNeenm6ozNXjdeJEM_-JXwdVHrJuH2WD0huwlfN6ZvatM39Doga1XNCFj91cYFUlIS86FwTyWWKKbnnFXlKaKcTTJI32TWzYcj7nFsesCxVAjDc9rwD4Sg2LGOXxHBLFFu0MkV9vvSCRybCTb2BP8vObpHdsQjalIC8778e1kNcg4z4J5xyzAXn82idxs0eG8j6o6LKndkRqDkSsVwFfkVGe9uDdNEDpzvr02xAiT5sTfbbVfG_VC9Q6MIYX5YpP25O_O_d5z9Wa8V9QAN8ocZ8NHOUpkbPWAegI7Yy0Q-earUEdn2xf9KonmuZMUXmrR2FjcGNYEWXylyvLDuZdt_MJsfZtPyHTGyb7TMhhEuj8BgaxtrvP6uk8Zvxx"; 
         
         // Comptes par défaut (toujours disponibles en secours)
@@ -162,8 +168,21 @@
                 }
             };
             
-            // Premier appel avec le token actuel
-            return doRequest(config.token);
+            // Premier appel avec le token actuel. 
+            // Si on a un refresh token hardcodé mais pas de token valide, on tente le refresh d'abord
+            let currentToken = config.token;
+            if (!currentToken && config.refreshToken && config.appKey && config.appSecret) {
+                 try {
+                     console.log("Initialisation via Refresh Token Hardcodé...");
+                     const refreshed = await refreshAccessToken(config.refreshToken, config.appKey, config.appSecret);
+                     if(refreshed) {
+                         currentToken = refreshed;
+                         setConfig({...config, token: refreshed});
+                     }
+                 } catch(e) { console.warn("Echec init refresh", e); }
+            }
+
+            return doRequest(currentToken);
         };
 
         // --- WRAPPERS SERVICES DROPBOX ---
@@ -290,12 +309,12 @@
             // Config enrichie pour OAuth
             const [dbxConfig, setDbxConfig] = useState({ 
                 token: HARDCODED_DBX_TOKEN, 
-                refreshToken: '', 
-                appKey: '', 
-                appSecret: '', 
+                refreshToken: HARDCODED_REFRESH_TOKEN || '', 
+                appKey: HARDCODED_APP_KEY || '', 
+                appSecret: HARDCODED_APP_SECRET || '', 
                 pathTarifs: '/Tarifs', 
                 pathFT: '/Fiches', 
-                geminiKey: '' 
+                geminiKey: HARDCODED_GEMINI_KEY || '' 
             });
             
             const [view, setView] = useState('login'); 
@@ -342,9 +361,23 @@
                     const parsed = JSON.parse(storedConfig);
                     // Priorité au token hardcodé s'il est plus récent ou présent
                     if(HARDCODED_DBX_TOKEN && !parsed.token) parsed.token = HARDCODED_DBX_TOKEN;
+                    // Priorité aux refresh tokens hardcodés s'ils sont présents dans le code source
+                    if(HARDCODED_REFRESH_TOKEN) parsed.refreshToken = HARDCODED_REFRESH_TOKEN;
+                    if(HARDCODED_APP_KEY) parsed.appKey = HARDCODED_APP_KEY;
+                    if(HARDCODED_APP_SECRET) parsed.appSecret = HARDCODED_APP_SECRET;
+                    if(HARDCODED_GEMINI_KEY) parsed.geminiKey = HARDCODED_GEMINI_KEY;
+                    
                     setDbxConfig(parsed);
-                } else if(HARDCODED_DBX_TOKEN) {
-                    setDbxConfig(prev => ({...prev, token: HARDCODED_DBX_TOKEN}));
+                } else {
+                    // Premier lancement
+                    setDbxConfig(prev => ({
+                        ...prev, 
+                        token: HARDCODED_DBX_TOKEN,
+                        refreshToken: HARDCODED_REFRESH_TOKEN,
+                        appKey: HARDCODED_APP_KEY,
+                        appSecret: HARDCODED_APP_SECRET,
+                        geminiKey: HARDCODED_GEMINI_KEY
+                    }));
                 }
 
                 if (storedUsers) setUsers(JSON.parse(storedUsers));
@@ -361,7 +394,8 @@
             useEffect(() => {
                 let interval;
                 // MODIFICATION : On autorise le chargement si on est connecté OU si on est sur la page de login (pour charger les users)
-                if ((currentUser || view === 'login') && (dbxConfig.token || dbxConfig.refreshToken)) {
+                // ET si on a soit un token, soit un moyen d'en avoir (refreshToken)
+                if ((currentUser || view === 'login') && (dbxConfig.token || (dbxConfig.refreshToken && dbxConfig.appKey))) {
                     // Chargement initial (sauf si on a déjà des données et qu'on est juste en navigation, mais sur login on force pour avoir les users)
                     if(tarifs.length === 0 || view === 'login') loadCloudDatabase(view !== 'login'); // Silent seulement si déjà connecté
 
@@ -396,7 +430,7 @@
                     setSyncLog("✅ Refresh Token configuré et partagé avec succès !");
                     setSyncStatus('success');
                     setAuthCode('');
-                    alert("Succès ! Connexion permanente établie et partagée avec l'équipe.");
+                    alert("Succès ! Connexion permanente établie et partagée avec l'équipe.\n\nIMPORTANT: Copiez les valeurs affichées dans l'onglet Admin vers le code source pour que cela marche sur de nouveaux appareils !");
                 } catch(e) {
                     setSyncLog("❌ Erreur OAuth : " + e.message);
                     setSyncStatus('error');
@@ -427,7 +461,9 @@
             };
 
             const loadCloudDatabase = async (silent = false) => {
-                if (!dbxConfig.token && !dbxConfig.refreshToken) return;
+                // On peut charger si on a un token OU si on a de quoi en faire un
+                if (!dbxConfig.token && !(dbxConfig.refreshToken && dbxConfig.appKey)) return;
+                
                 if (!silent) { setSyncStatus('working'); setSyncLog("Chargement Cloud..."); }
                 
                 try {
@@ -449,9 +485,10 @@
 
                     // MISE A JOUR AUTOMATIQUE DE LA CONFIGURATION (OAUTH PARTAGÉ)
                     if (data.config && data.config.refreshToken) {
-                        if (data.config.refreshToken !== dbxConfig.refreshToken) {
+                        // On update seulement si on n'a pas de config locale ou si elle est différente
+                        // Mais on ne veut pas écraser une config locale valide par une config cloud vide
+                        if (data.config.refreshToken && data.config.refreshToken !== dbxConfig.refreshToken) {
                             const newSharedConfig = { ...dbxConfig, ...data.config };
-                            // On ne remplace pas le token d'accès courant s'il marche, mais on met à jour le refresh token
                             setDbxConfig(newSharedConfig);
                             localStorage.setItem('tdbx_config', JSON.stringify(newSharedConfig));
                             if (!silent) console.log("Configuration OAuth mise à jour depuis le Cloud.");
@@ -463,10 +500,10 @@
                     console.error("Sync error", e);
                     if (e.message === "EXPIRED_TOKEN_ALERT") {
                         if (!silent) { 
-                            setSyncLog("⚠️ Token de secours expiré. Impossible de charger les données initiales.");
+                            setSyncLog("⚠️ Token expiré et pas de Refresh Token valide.");
                             setSyncStatus('error');
-                            // On force l'ouverture de la config pour permettre une réparation manuelle
-                            setShowConfigModal(true);
+                            // On force l'ouverture de la config pour permettre une réparation manuelle uniquement si c'est nécessaire
+                            if(users.length <= 2) setShowConfigModal(true); // Si on n'a que les users par défaut, c'est critique
                         }
                     } else {
                         if (!silent) { setSyncLog("⚠️ Erreur Sync : " + e.message); setSyncStatus('error'); }
@@ -488,7 +525,7 @@
                     setCurrentQuote(randomQuote);
                     setShowQuoteModal(true);
 
-                    // Demande config si rien du tout
+                    // Demande config si rien du tout (ni token, ni refresh)
                     if (!dbxConfig.token && !dbxConfig.refreshToken && !HARDCODED_DBX_TOKEN) setShowConfigModal(true);
                 } else {
                     setLoginError('Identifiants incorrects');

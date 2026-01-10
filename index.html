@@ -694,7 +694,6 @@
                 setActiveTab('search');
             };
 
-            // ... (openFile, renderPage, etc. kept same)
             const openFile = async (path, name) => {
                 setIsFileLoading(true);
                 setViewingFile(null);
@@ -758,7 +757,6 @@
                 } catch (err) { showToast("Erreur : " + err.message, 'error'); } finally { setIsUploading(false); if(uploadInputRef.current) uploadInputRef.current.value = ''; }
             };
 
-            // ... (Admin Logic kept same)
             const analyzePDF = async (blob, filename) => {
                 try {
                     const arrayBuffer = await blob.arrayBuffer();
@@ -981,22 +979,34 @@
             }, [searchQuery, tarifs, fiches]);
 
             // --- VIEW: PENDING APPROVAL ---
-            if (view === 'pending_approval') return (
-                <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-                    <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl text-center animate-fade">
-                        <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Icon name="ShieldAlert" size={40}/>
+            if (view === 'pending_approval') {
+                const req = pendingRequests.find(r => r.deviceId === deviceId);
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+                        <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl text-center animate-fade">
+                            <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <Icon name="ShieldAlert" size={40}/>
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-800 mb-2">Appareil non autorisé</h2>
+                            <p className="text-slate-500 mb-6">Votre demande d'accès pour cet appareil a été envoyée à l'administrateur.</p>
+                            <div className="bg-slate-50 p-4 rounded-xl mb-6 text-left border border-slate-200">
+                                {req && (
+                                    <div className="mb-4 border-b border-slate-200 pb-4">
+                                        <div className="text-xs text-slate-400 font-bold uppercase mb-1">Demandeur</div>
+                                        <div className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                            <Icon name="User" size={16}/> {req.user}
+                                        </div>
+                                        <div className="text-xs text-slate-500 font-mono ml-6">{req.login}</div>
+                                    </div>
+                                )}
+                                <div className="text-xs text-slate-400 font-bold uppercase mb-1">ID Appareil</div>
+                                <div className="font-mono text-sm bg-white p-2 rounded border border-slate-200 break-all">{deviceId}</div>
+                            </div>
+                            <button onClick={() => setView('login')} className="text-blue-600 font-bold hover:underline">Retour à la connexion</button>
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Appareil non autorisé</h2>
-                        <p className="text-slate-500 mb-6">Votre demande d'accès pour cet appareil a été envoyée à l'administrateur.</p>
-                        <div className="bg-slate-50 p-4 rounded-xl mb-6 text-left border border-slate-200">
-                            <div className="text-xs text-slate-400 font-bold uppercase mb-1">ID Appareil</div>
-                            <div className="font-mono text-sm bg-white p-2 rounded border border-slate-200 break-all">{deviceId}</div>
-                        </div>
-                        <button onClick={() => setView('login')} className="text-blue-600 font-bold hover:underline">Retour à la connexion</button>
                     </div>
-                </div>
-            );
+                );
+            }
 
             // --- VIEW: LOGIN ---
             if (view === 'login') return (

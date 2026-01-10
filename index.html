@@ -315,11 +315,17 @@
             const report = { date: new Date().toLocaleString(), added: [], removed: [], changed: [] };
             
             // KEY FUNCTION : Utilise Nom + Emballage pour l'unicité
+            // AMELIORATION: Normalisation agressive pour ignorer espaces, tirets, points et accents
+            const normalizeStr = (str) => {
+                if (!str) return "";
+                // Normalise (sépare accents), supprime les accents, met en minuscule, garde seulement a-z et 0-9
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '');
+            };
+
             const getKey = (p) => {
-                // AMELIORATION: Suppression totale des espaces pour la comparaison (ex: "Produit A" == "ProduitA")
-                const n = p.name ? p.name.replace(/\s+/g, '').toLowerCase() : "";
-                const pack = p.packaging ? p.packaging.replace(/\s+/g, '').toLowerCase() : "";
-                return `${n}|${pack}`; // Séparateur pipe pour éviter les conflits
+                const n = normalizeStr(p.name);
+                const pack = normalizeStr(p.packaging);
+                return `${n}_${pack}`; // Clé normalisée
             };
 
             const oldMap = new Map();

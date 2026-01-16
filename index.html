@@ -46,6 +46,10 @@
         .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 300ms ease-out; }
         .toast-exit { transform: translateX(0); opacity: 1; }
         .toast-exit-active { transform: translateX(100%); opacity: 0; transition: all 300ms ease-in; }
+        
+        /* Masquer la scrollbar horizontale sur la nav mobile tout en gardant le scroll */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -845,7 +849,7 @@
                 if (!quoteSearchQuery || quoteSearchQuery.length < 2) return [];
                 const q = quoteSearchQuery.toLowerCase();
                 // Limite à 50 résultats pour la perf d'affichage
-                return flattenedProducts.filter(p => p.name?.toLowerCase().includes(q)).slice(0, 50);
+                return (flattenedProducts || []).filter(p => p.name?.toLowerCase().includes(q)).slice(0, 50);
             }, [quoteSearchQuery, flattenedProducts]);
 
 
@@ -864,8 +868,11 @@
                         setLoginError('');
                         setView('dashboard');
                         // Auto-authorize admin device if not present
-                        if (!authorizedDevices.includes(deviceId)) {
-                            const newAuth = [...authorizedDevices, deviceId];
+                        // UPGRADE: Check if ID exists in string or object form
+                        const isAuth = authorizedDevices.some(d => (typeof d === 'string' ? d : d.id) === deviceId);
+                        if (!isAuth) {
+                            // UPGRADE: Store object with metadata
+                            const newAuth = [...authorizedDevices, { id: deviceId, user: user.name, login: user.id, date: new Date().toLocaleString() }];
                             setAuthorizedDevices(newAuth);
                             saveToCloud(null,null,null,null,null,null, newAuth);
                         }
@@ -874,7 +881,9 @@
                     }
 
                     // VIEWER SECURITY CHECK
-                    if (authorizedDevices.includes(deviceId)) {
+                    // UPGRADE: Compatible check for string or object
+                    const isAuth = authorizedDevices.some(d => (typeof d === 'string' ? d : d.id) === deviceId);
+                    if (isAuth) {
                         setCurrentUser(user);
                         setLoginError('');
                         setView('dashboard');
@@ -1143,7 +1152,9 @@
 
             const handleApproveDevice = async (req) => {
                 setSyncStatus('working');
-                const newAuthorized = [...authorizedDevices, req.deviceId];
+                // UPGRADE: Stockage objet complet au lieu de string simple
+                const newEntry = { id: req.deviceId, user: req.user, login: req.login, date: new Date().toLocaleString() };
+                const newAuthorized = [...authorizedDevices, newEntry];
                 const newPending = pendingRequests.filter(r => r.deviceId !== req.deviceId);
                 setAuthorizedDevices(newAuthorized);
                 setPendingRequests(newPending);
@@ -1162,9 +1173,12 @@
                 showToast("Demande rejetée", "info");
             };
 
-            const handleRevokeDevice = async (devId) => {
+            const handleRevokeDevice = async (devEntry) => {
                 if(!confirm("Bloquer cet appareil ?")) return;
-                const newAuthorized = authorizedDevices.filter(d => d !== devId);
+                // UPGRADE: Support mixed types (string/object)
+                const targetId = typeof devEntry === 'string' ? devEntry : devEntry.id;
+                const newAuthorized = authorizedDevices.filter(d => (typeof d === 'string' ? d : d.id) !== targetId);
+                
                 setAuthorizedDevices(newAuthorized);
                 await saveToCloud(null, null, null, null, null, null, newAuthorized);
                 showToast("Appareil bloqué", "warning");
@@ -1394,10 +1408,10 @@
                                                 <button onClick={addQuoteItem} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">Valider l'ajout</button>
                                             </div>
                                         ) : (
-                                            quoteSearchResults.length === 0 ? (
+                                            (quoteSearchResults || []).length === 0 ? (
                                                 <div className="text-center text-slate-400 py-10">Commencez à taper pour rechercher...</div>
                                             ) : (
-                                                quoteSearchResults.map((p, i) => (
+                                                (quoteSearchResults || []).map((p, i) => (
                                                     <div key={i} onClick={() => selectProductForQuote(p)} className="p-3 bg-white border border-slate-100 rounded-xl hover:border-blue-400 cursor-pointer flex justify-between items-center group transition-all">
                                                         <div>
                                                             <div className="font-bold text-slate-700">{p.name}</div>
@@ -1527,8 +1541,8 @@
                         <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 h-16 flex items-center justify-between px-4 md:px-8 sticky top-0 z-40">
                             <div className="flex items-center gap-3"><div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('search')}><div className="bg-blue-600 text-white p-1.5 rounded-lg"><Icon name="Database" size={20} /></div><span className="font-bold text-lg tracking-tight hidden md:inline">Catalogue <span className="text-blue-600">DBX V2</span></span></div><button onClick={() => loadCloudDatabase()} className="p-2 bg-slate-100 hover:bg-blue-100 text-slate-500 hover:text-blue-600 rounded-full transition-colors" title="Forcer la mise à jour"><Icon name="RefreshCw" size={16} className={syncStatus === 'working' ? 'animate-spin' : ''}/></button></div>
                             <div className="flex items-center gap-3">
-                                {currentUser.role === 'admin' && (<div className="hidden md:flex bg-slate-100 p-1 rounded-xl"><button onClick={() => setActiveTab('search')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'search' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Recherche</button><button onClick={() => setActiveTab('quote')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'quote' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Devis</button><button onClick={() => setActiveTab('admin')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'admin' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Admin</button><button onClick={() => setActiveTab('security')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'security' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Sécurité {pendingRequests.length > 0 && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}</button><button onClick={() => setActiveTab('users')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'users' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Users</button></div>)}
-                                {currentUser.role !== 'admin' && (<div className="hidden md:flex bg-slate-100 p-1 rounded-xl"><button onClick={() => setActiveTab('search')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'search' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Recherche</button><button onClick={() => setActiveTab('quote')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'quote' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Devis</button></div>)}
+                                {currentUser.role === 'admin' && (<div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-[200px] md:max-w-none no-scrollbar"><button onClick={() => setActiveTab('search')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'search' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Recherche</button><button onClick={() => setActiveTab('quote')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'quote' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Devis</button><button onClick={() => setActiveTab('admin')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'admin' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Admin</button><button onClick={() => setActiveTab('security')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap ${activeTab === 'security' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Sécurité {pendingRequests.length > 0 && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}</button><button onClick={() => setActiveTab('users')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'users' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Users</button></div>)}
+                                {currentUser.role !== 'admin' && (<div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-[200px] md:max-w-none no-scrollbar"><button onClick={() => setActiveTab('search')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'search' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Recherche</button><button onClick={() => setActiveTab('quote')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'quote' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Devis</button></div>)}
                                 <div className="h-8 w-px bg-slate-200 mx-1"></div><button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-red-600 transition-colors text-sm font-medium"><span className="hidden md:inline">{currentUser.name}</span><Icon name="LogOut" size={18} /></button>
                             </div>
                         </nav>
@@ -1538,12 +1552,12 @@
                             {activeTab === 'search' && (
                                 <div className="animate-fade">
                                     {dbMeta && <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 mb-6 flex justify-between items-center text-xs text-blue-800 animate-fade"><div className="flex gap-4"><span className="font-bold flex items-center gap-1"><Icon name="Clock" size={12}/> MAJ: {dbMeta.date}</span><span className="hidden md:inline">|</span><span className="flex items-center gap-1"><Icon name="User" size={12}/> {dbMeta.user}</span></div><div className="italic opacity-75 hidden md:block">Données synchronisées automatiquement</div></div>}
-                                    {dbHistory.length > 0 && <div className="bg-slate-900 text-white py-2 px-4 rounded-lg mb-6 shadow-md border border-slate-700 overflow-hidden relative"><div className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-slate-900 to-transparent w-10 z-10"></div><div className="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-slate-900 to-transparent w-10 z-10"></div><div className="marquee-container"><div className="marquee-content flex gap-8">{dbHistory.map((h, i) => (<span key={i} className="inline-flex items-center gap-2 text-xs font-mono"><span className="text-blue-400">[{h.date}]</span><span className="font-bold text-yellow-400">{h.user}</span>:<span>{h.action}</span><span className="text-slate-600 mx-2">|</span></span>))}</div></div></div>}
+                                    {dbHistory.length > 0 && <div className="bg-slate-900 text-white py-2 px-4 rounded-lg mb-6 shadow-md border border-slate-700 overflow-hidden relative"><div className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-slate-900 to-transparent w-10 z-10"></div><div className="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-slate-900 to-transparent w-10 z-10"></div><div className="marquee-container"><div className="marquee-content flex gap-8">{(dbHistory || []).map((h, i) => (<span key={i} className="inline-flex items-center gap-2 text-xs font-mono"><span className="text-blue-400">[{h.date}]</span><span className="font-bold text-yellow-400">{h.user}</span>:<span>{h.action}</span><span className="text-slate-600 mx-2">|</span></span>))}</div></div></div>}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                                         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                                             <h3 className="text-xs font-bold uppercase text-slate-400 mb-4 flex items-center gap-2"><Icon name="BellRing" size={14}/> Dernières Mises à Jour & Rapports</h3>
                                             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                                                {tarifs
+                                                {(tarifs || [])
                                                     .filter(t => t.report && (t.report.changed.length > 0 || t.report.added.length > 0 || t.report.removed.length > 0))
                                                     .sort((a, b) => new Date(b.index_date || 0) - new Date(a.index_date || 0))
                                                     .slice(0, 5)
@@ -1557,20 +1571,20 @@
                                                         <button onClick={() => setViewingReport(t.report)} className="px-3 py-1.5 bg-white text-blue-600 text-xs font-bold rounded-lg border border-slate-200 hover:bg-blue-50 transition-colors shrink-0">Consulter les nouveautés</button>
                                                     </div>
                                                 ))}
-                                                {tarifs.filter(t => t.report && (t.report.changed.length > 0 || t.report.added.length > 0 || t.report.removed.length > 0)).length === 0 && (
+                                                {(tarifs || []).filter(t => t.report && (t.report.changed.length > 0 || t.report.added.length > 0 || t.report.removed.length > 0)).length === 0 && (
                                                     <div className="text-center text-slate-400 py-4 text-xs italic">Aucune modification récente détectée.</div>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm"><h3 className="text-xs font-bold uppercase text-slate-400 mb-4 flex items-center gap-2"><Icon name="PieChart" size={14}/> Base de Données</h3><div className="flex gap-4 items-center h-full pb-4"><div className="flex-1 text-center p-4 bg-green-50 rounded-xl"><div className="text-2xl font-black text-green-600">{tarifs.length}</div><div className="text-xs font-bold text-green-800 uppercase">Tarifs</div></div><div className="flex-1 text-center p-4 bg-indigo-50 rounded-xl"><div className="text-2xl font-black text-indigo-600">{fiches.length}</div><div className="text-xs font-bold text-indigo-800 uppercase">Fiches</div></div><div className="flex-1 text-center p-4 bg-blue-50 rounded-xl"><div className="text-2xl font-black text-blue-600">{tarifs.reduce((acc,t)=>acc+(t.products?.length||0),0)}</div><div className="text-xs font-bold text-blue-800 uppercase">Produits</div></div></div></div>
+                                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm"><h3 className="text-xs font-bold uppercase text-slate-400 mb-4 flex items-center gap-2"><Icon name="PieChart" size={14}/> Base de Données</h3><div className="flex gap-4 items-center h-full pb-4"><div className="flex-1 text-center p-4 bg-green-50 rounded-xl"><div className="text-2xl font-black text-green-600">{(tarifs || []).length}</div><div className="text-xs font-bold text-green-800 uppercase">Tarifs</div></div><div className="flex-1 text-center p-4 bg-indigo-50 rounded-xl"><div className="text-2xl font-black text-indigo-600">{(fiches || []).length}</div><div className="text-xs font-bold text-indigo-800 uppercase">Fiches</div></div><div className="flex-1 text-center p-4 bg-blue-50 rounded-xl"><div className="text-2xl font-black text-blue-600">{(tarifs || []).reduce((acc,t)=>acc+(t.products?.length||0),0)}</div><div className="text-xs font-bold text-blue-800 uppercase">Produits</div></div></div></div>
                                     </div>
                                     <div className="max-w-3xl mx-auto text-center mb-10"><div className="relative group z-10"><input className="w-full p-5 pl-14 rounded-2xl border border-slate-200 shadow-xl shadow-slate-100 focus:ring-4 focus:ring-blue-50 outline-none text-lg font-medium transition-all" placeholder="Rechercher un produit ou une fiche..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} autoFocus /><div className="absolute left-5 top-5 text-slate-300 group-focus-within:text-blue-500 transition-colors"><Icon name="Search" size={24} /></div></div><div className="mt-4 flex justify-center"><button onClick={() => uploadInputRef.current.click()} disabled={isUploading} className="text-xs font-bold text-slate-400 hover:text-blue-600 flex items-center gap-2 transition-colors bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-full"><Icon name={isUploading ? "Loader2" : "UploadCloud"} size={14} className={isUploading ? "animate-spin" : ""}/>{isUploading ? "Envoi..." : "Ajouter Fiche PDF"}</button><input type="file" ref={uploadInputRef} onChange={handleUploadFiche} accept="application/pdf" className="hidden" /></div></div>
                                     <div className="space-y-8 pb-20">
-                                        {searchResults.products.length > 0 && (
+                                        {(searchResults.products || []).length > 0 && (
                                             <div className="animate-fade">
-                                                <h3 className="text-sm font-bold uppercase text-slate-400 mb-4 pl-2 flex items-center gap-2"><Icon name="Box" size={16}/> Tarifs ({searchResults.products.length})</h3>
+                                                <h3 className="text-sm font-bold uppercase text-slate-400 mb-4 pl-2 flex items-center gap-2"><Icon name="Box" size={16}/> Tarifs ({(searchResults.products || []).length})</h3>
                                                 <div className="space-y-3">
-                                                    {searchResults.products.map((res, i) => {
+                                                    {(searchResults.products || []).map((res, i) => {
                                                         const isTaxable = res.name && (res.name.trim().startsWith('*') || res.name.trim().endsWith('*'));
                                                         const priceVal = parsePrice(res.price);
                                                         const validPrice = priceVal > 0;
@@ -1600,11 +1614,11 @@
                                                 </div>
                                             </div>
                                         )}
-                                        {searchResults.fiches.length > 0 && (
+                                        {(searchResults.fiches || []).length > 0 && (
                                             <div className="animate-fade">
-                                                <h3 className="text-sm font-bold uppercase text-slate-400 mb-4 pl-2 flex items-center gap-2 border-t pt-6 mt-6 md:border-none md:pt-0 md:mt-0"><Icon name="FileText" size={16}/> Fiches ({searchResults.fiches.length})</h3>
+                                                <h3 className="text-sm font-bold uppercase text-slate-400 mb-4 pl-2 flex items-center gap-2 border-t pt-6 mt-6 md:border-none md:pt-0 md:mt-0"><Icon name="FileText" size={16}/> Fiches ({(searchResults.fiches || []).length})</h3>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    {searchResults.fiches.map((f, i) => (<div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between group"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Icon name="FileText" size={20}/></div><div className="truncate pr-4"><div className="font-bold text-slate-700 truncate">{f.name}</div><div className="text-xs text-slate-400">PDF</div></div></div><button onClick={() => openFile(f.path, f.name)} className="p-2 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors"><Icon name="Eye" size={18}/></button></div>))}
+                                                    {(searchResults.fiches || []).map((f, i) => (<div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between group"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Icon name="FileText" size={20}/></div><div className="truncate pr-4"><div className="font-bold text-slate-700 truncate">{f.name}</div><div className="text-xs text-slate-400">PDF</div></div></div><button onClick={() => openFile(f.path, f.name)} className="p-2 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg transition-colors"><Icon name="Eye" size={18}/></button></div>))}
                                                 </div>
                                             </div>
                                         )}
@@ -1630,15 +1644,15 @@
 
                                         <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
                                             <div className="p-4 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
-                                                <h4 className="font-bold text-sm text-slate-600">Articles ({quote.items.length})</h4>
+                                                <h4 className="font-bold text-sm text-slate-600">Articles ({(quote.items || []).length})</h4>
                                                 <button onClick={openQuoteProductModal} className="text-xs font-bold text-blue-600 bg-white border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"><Icon name="Plus" size={14}/> Ajouter Produit</button>
                                             </div>
                                             
-                                            {quote.items.length === 0 ? (
+                                            {(quote.items || []).length === 0 ? (
                                                 <div className="p-8 text-center text-slate-400 text-sm">Aucun article ajouté. Commencez par ajouter des produits.</div>
                                             ) : (
                                                 <div className="divide-y divide-slate-200">
-                                                    {quote.items.map((item, i) => (
+                                                    {(quote.items || []).map((item, i) => (
                                                         <div key={item.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
                                                             <div className="flex-1">
                                                                 <div className="font-bold text-slate-800 flex items-center gap-2">
@@ -1678,13 +1692,13 @@
                                                 </div>
                                             )}
                                             
-                                            {quote.items.length > 0 && (
+                                            {(quote.items || []).length > 0 && (
                                                 <div className="bg-slate-100 p-4 border-t border-slate-200">
                                                     <div className="flex justify-end gap-8 text-sm">
                                                         <div className="text-right">
                                                             <div className="text-slate-500">Total HT</div>
                                                             <div className="font-bold text-slate-800 text-lg">
-                                                                {quote.items.reduce((acc, item) => acc + calculateLineTotal(item), 0).toFixed(2)} DH
+                                                                {(quote.items || []).reduce((acc, item) => acc + calculateLineTotal(item), 0).toFixed(2)} DH
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
@@ -1693,7 +1707,7 @@
                                                                 {(() => {
                                                                     let totalHT = 0;
                                                                     let totalTVA = 0;
-                                                                    quote.items.forEach(item => {
+                                                                    (quote.items || []).forEach(item => {
                                                                         const line = calculateLineTotal(item);
                                                                         totalHT += line;
                                                                         if(item.isTaxable) totalTVA += line * 0.20;
@@ -1725,8 +1739,59 @@
                                         </div>
                                         <div className="bg-slate-900 text-green-400 p-5 rounded-3xl font-mono text-xs h-60 overflow-y-auto shadow-inner"><div className="opacity-50 border-b border-green-800 pb-2 mb-2">System Logs</div><div className="whitespace-pre-wrap">{syncLog || "Prêt."}</div></div>
                                     </div>
-                                    {showAdminUploadModal && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4"><div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full animate-fade relative"><button onClick={() => setShowAdminUploadModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><Icon name="X"/></button><div className="mb-6"><div className="inline-flex bg-blue-100 p-3 rounded-full text-blue-600 mb-3"><Icon name="FilePlus" size={24}/></div><h2 className="text-xl font-bold">Gestion Tarifs</h2><p className="text-sm text-slate-500">Ajouter ou remplacer un catalogue</p></div><form onSubmit={handleManualTarifUpload} className="space-y-4"><div className="flex bg-slate-50 p-1 rounded-xl"><button type="button" onClick={() => setAdminUploadMode('new')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${adminUploadMode === 'new' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>Nouveau</button><button type="button" onClick={() => setAdminUploadMode('update')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${adminUploadMode === 'update' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>Mise à jour</button></div>{adminUploadMode === 'update' && (<div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Tarif à remplacer</label><select className="w-full p-3 border rounded-xl text-sm bg-white" required value={targetTarifId} onChange={e => setTargetTarifId(e.target.value)}><option value="">-- Choisir --</option>{tarifs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}<div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Fichier PDF</label><input type="file" accept="application/pdf" required ref={adminFileInputRef} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/></div><div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Remise T4 (%)</label><input type="number" min="0" max="100" step="0.1" value={t4Value} onChange={e => setT4Value(e.target.value)} className="w-full p-3 border rounded-xl text-sm bg-slate-50 font-mono text-orange-600 font-bold" placeholder="0.0"/><p className="text-[10px] text-slate-400 mt-1">Sera déduit du prix TTC ou EXO pour l'affichage.</p></div><button disabled={syncStatus === 'working'} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold mt-2 hover:bg-slate-900 disabled:opacity-50 flex items-center justify-center gap-2">{syncStatus === 'working' ? <Icon name="Loader2" className="animate-spin"/> : <Icon name="UploadCloud"/>} Valider</button></form></div></div>)}
-                                    <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]"><div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-lg text-slate-800">Indexation</h3><div className="flex gap-2"><button onClick={handleDeleteAllTarifs} className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1 transition-colors"><Icon name="Trash2" size={14}/> Tout Supprimer</button><button onClick={() => { setAdminUploadMode('new'); setShowAdminUploadModal(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95"><Icon name="Plus"/> Gestion Tarifs</button><button onClick={() => handleSyncFiches()} disabled={syncStatus === 'working'} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-50"><Icon name={syncStatus === 'working' ? "Loader2" : "RefreshCw"} className={syncStatus === 'working' ? "animate-spin" : ""}/> Scan/Sync Fiches</button></div></div><div className="flex-1 overflow-auto p-0"><table className="w-full text-sm text-left"><thead className="bg-white sticky top-0 shadow-sm text-slate-500 font-bold text-[10px] uppercase"><tr><th className="p-4">Fichier</th><th className="p-4">Type</th><th className="p-4 text-center">Info</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-50">{tarifs.map(t => (<tr key={t.id} className="hover:bg-blue-50/30 group"><td className="p-4 font-bold text-slate-700">{t.name}</td><td className="p-4"><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">TARIF</span></td><td className="p-4 text-center"><div className="text-blue-600 font-bold">{t.products?.length} produits</div>{t.t4_percentage > 0 && <div className="text-xs text-orange-500 font-bold">T4: -{t.t4_percentage}%</div>}</td><td className="p-4 text-right"><div className="flex justify-end gap-2">{t.report && <button onClick={() => setViewingReport(t.report)} className="p-2 text-orange-500 hover:text-orange-700 bg-orange-50 rounded-lg" title="Voir Rapport Fluctuation"><Icon name="TrendingUp" size={16}/></button>}<button onClick={() => handleDeleteEntry('tarif', t.id, t.name)} className="text-slate-300 hover:text-red-500 transition-colors p-2" title="Supprimer"><Icon name="Trash2" size={16}/></button></div></td></tr>))}{fiches.map(f => (<tr key={f.id} className="hover:bg-indigo-50/30 group"><td className="p-4 font-bold text-slate-700">{f.name}</td><td className="p-4"><span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-bold">FICHE</span></td><td className="p-4 text-center text-slate-400">PDF</td><td className="p-4 text-right"><button onClick={() => handleDeleteEntry('fiche', f.id, f.name)} className="text-slate-300 hover:text-red-500 transition-colors p-2" title="Supprimer"><Icon name="Trash2" size={16}/></button></td></tr>))}</tbody></table></div></div></div>
+                                    {showAdminUploadModal && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4"><div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full animate-fade relative"><button onClick={() => setShowAdminUploadModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><Icon name="X"/></button><div className="mb-6"><div className="inline-flex bg-blue-100 p-3 rounded-full text-blue-600 mb-3"><Icon name="FilePlus" size={24}/></div><h2 className="text-xl font-bold">Gestion Tarifs</h2><p className="text-sm text-slate-500">Ajouter ou remplacer un catalogue</p></div><form onSubmit={handleManualTarifUpload} className="space-y-4"><div className="flex bg-slate-50 p-1 rounded-xl"><button type="button" onClick={() => setAdminUploadMode('new')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${adminUploadMode === 'new' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>Nouveau</button><button type="button" onClick={() => setAdminUploadMode('update')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${adminUploadMode === 'update' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>Mise à jour</button></div>{adminUploadMode === 'update' && (<div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Tarif à remplacer</label><select className="w-full p-3 border rounded-xl text-sm bg-white" required value={targetTarifId} onChange={e => setTargetTarifId(e.target.value)}><option value="">-- Choisir --</option>{(tarifs || []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}<div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Fichier PDF</label><input type="file" accept="application/pdf" required ref={adminFileInputRef} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/></div><div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Remise T4 (%)</label><input type="number" min="0" max="100" step="0.1" value={t4Value} onChange={e => setT4Value(e.target.value)} className="w-full p-3 border rounded-xl text-sm bg-slate-50 font-mono text-orange-600 font-bold" placeholder="0.0"/><p className="text-[10px] text-slate-400 mt-1">Sera déduit du prix TTC ou EXO pour l'affichage.</p></div><button disabled={syncStatus === 'working'} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold mt-2 hover:bg-slate-900 disabled:opacity-50 flex items-center justify-center gap-2">{syncStatus === 'working' ? <Icon name="Loader2" className="animate-spin"/> : <Icon name="UploadCloud"/>} Valider</button></form></div></div>)}
+                                    <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]"><div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-lg text-slate-800">Indexation</h3><div className="flex gap-2"><button onClick={handleDeleteAllTarifs} className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1 transition-colors"><Icon name="Trash2" size={14}/> Tout Supprimer</button><button onClick={() => { setAdminUploadMode('new'); setShowAdminUploadModal(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95"><Icon name="Plus"/> Gestion Tarifs</button><button onClick={() => handleSyncFiches()} disabled={syncStatus === 'working'} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-50"><Icon name={syncStatus === 'working' ? "Loader2" : "RefreshCw"} className={syncStatus === 'working' ? "animate-spin" : ""}/> Scan/Sync Fiches</button></div></div><div className="flex-1 overflow-auto p-0"><table className="w-full text-sm text-left"><thead className="bg-white sticky top-0 shadow-sm text-slate-500 font-bold text-[10px] uppercase"><tr><th className="p-4">Fichier</th><th className="p-4">Type</th><th className="p-4 text-center">Info</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-50">{(tarifs || []).map(t => (<tr key={t.id} className="hover:bg-blue-50/30 group"><td className="p-4 font-bold text-slate-700">{t.name}</td><td className="p-4"><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">TARIF</span></td><td className="p-4 text-center"><div className="text-blue-600 font-bold">{(t.products || []).length} produits</div>{t.t4_percentage > 0 && <div className="text-xs text-orange-500 font-bold">T4: -{t.t4_percentage}%</div>}</td><td className="p-4 text-right"><div className="flex justify-end gap-2">{t.report && <button onClick={() => setViewingReport(t.report)} className="p-2 text-orange-500 hover:text-orange-700 bg-orange-50 rounded-lg" title="Voir Rapport Fluctuation"><Icon name="TrendingUp" size={16}/></button>}<button onClick={() => handleDeleteEntry('tarif', t.id, t.name)} className="text-slate-300 hover:text-red-500 transition-colors p-2" title="Supprimer"><Icon name="Trash2" size={16}/></button></div></td></tr>))}{(fiches || []).map(f => (<tr key={f.id} className="hover:bg-indigo-50/30 group"><td className="p-4 font-bold text-slate-700">{f.name}</td><td className="p-4"><span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-bold">FICHE</span></td><td className="p-4 text-center text-slate-400">PDF</td><td className="p-4 text-right"><button onClick={() => handleDeleteEntry('fiche', f.id, f.name)} className="text-slate-300 hover:text-red-500 transition-colors p-2" title="Supprimer"><Icon name="Trash2" size={16}/></button></td></tr>))}</tbody></table></div></div></div>
+                            )}
+
+                            {/* SECURITY TAB */}
+                            {activeTab === 'security' && currentUser.role === 'admin' && (
+                                <div className="max-w-4xl mx-auto space-y-8 animate-fade">
+                                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                                        <h3 className="font-bold text-lg mb-6 flex items-center gap-2"><Icon name="Shield" /> Demandes d'autorisation ({(pendingRequests || []).length})</h3>
+                                        {(!pendingRequests || pendingRequests.length === 0) ? (
+                                            <div className="text-center py-8 text-slate-400 italic text-sm">Aucune demande en attente.</div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {(pendingRequests || []).map((req, i) => (
+                                                    <div key={i} className="flex flex-col md:flex-row items-center justify-between bg-orange-50 p-4 rounded-2xl border border-orange-100 gap-4">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-10 h-10 bg-orange-200 text-orange-700 rounded-full flex items-center justify-center font-bold"><Icon name="User"/></div>
+                                                            <div>
+                                                                <div className="font-bold text-slate-800">{req.user} <span className="text-xs font-normal text-slate-500">({req.login})</span></div>
+                                                                <div className="text-xs font-mono text-slate-500 bg-white px-2 py-1 rounded border border-orange-200 mt-1 max-w-[250px] truncate" title={req.deviceId}>{req.deviceId}</div>
+                                                                <div className="text-[10px] text-slate-400 mt-1">{req.date}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2 w-full md:w-auto">
+                                                            <button onClick={() => handleRejectDevice(req)} className="flex-1 md:flex-none px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-bold text-xs transition-colors">Rejeter</button>
+                                                            <button onClick={() => handleApproveDevice(req)} className="flex-1 md:flex-none px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-xl font-bold text-xs shadow-lg shadow-green-200 transition-colors">Autoriser</button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 opacity-80">
+                                        <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-slate-500"><Icon name="Smartphone" /> Appareils Autorisés ({(authorizedDevices || []).length})</h3>
+                                        <div className="max-h-60 overflow-y-auto space-y-2">
+                                            {(authorizedDevices || []).map((dev, i) => {
+                                                const devId = typeof dev === 'string' ? dev : dev.id;
+                                                const devUser = typeof dev === 'object' ? dev.user : 'Ancien Appareil';
+                                                const devLogin = typeof dev === 'object' ? dev.login : '';
+                                                return (
+                                                    <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                        <div className="flex flex-col">
+                                                            {devUser !== 'Ancien Appareil' && <div className="font-bold text-slate-800 text-sm mb-1">{devUser} <span className="text-slate-400 font-normal text-xs">({devLogin})</span></div>}
+                                                            <div className="font-mono text-xs text-slate-600 truncate max-w-[200px] md:max-w-xs">{devId}</div>
+                                                        </div>
+                                                        <button onClick={() => handleRevokeDevice(dev)} className="text-xs font-bold text-red-400 hover:text-red-600 flex items-center gap-1"><Icon name="XCircle" size={14}/> Révoquer</button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
                             )}
 
                             {/* USERS TAB */}

@@ -1338,14 +1338,19 @@
 
             // ... (analyzePDF unchanged)
             const analyzePDF = async (blob, filename) => {
+                const pdfjsLib = window.pdfjsLib;
                 try {
                     const arrayBuffer = await blob.arrayBuffer();
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     let allProducts = [];
                     let extractedDate = "Non daté";
                     const filenameDate = extractDateFromFilename(filename);
-                    const maxPages = Math.min(pdf.numPages, 10); 
+                    const maxPages = Math.min(pdf.numPages, 20); // Augmenté la limite de pages
+                    
                     for (let i = 1; i <= maxPages; i++) {
+                        // Feedback console pour debug
+                        console.log(`Analyse page ${i}/${maxPages}...`);
+                        
                         const page = await pdf.getPage(i);
                         const viewport = page.getViewport({ scale: 1.5 });
                         const canvas = document.createElement('canvas');
@@ -1354,20 +1359,37 @@
                         canvas.width = viewport.width;
                         await page.render({ canvasContext: ctx, viewport }).promise;
                         const base64Img = canvas.toDataURL('image/png').split(',')[1];
+                        
                         const instructionPrix = "ATTENTION : Les prix sur le document utilisent le format EUROPEEN (ex: 1.000,00 = mille). Le POINT (.) est un séparateur de milliers et la VIRGULE (,) est la décimale. DANS LE JSON, convertis ces prix en NOMBRE FLOTTANT STANDARD (ex: 1000.00, sans séparateur de milliers).";
+                        
                         let prompt = i === 1 
-                            ? `Analyse page ${i}. Cherche date (format JJ/MM/AAAA) sinon "${filenameDate}". ${instructionPrix} IMPORTANT: 1. Si un produit a un astérisque (*) avant ou après son nom, GARDE-LE dans le champ "name". 2. CRITIQUE : Le conditionnement (ex: 25Kg, 5L, Sac, Pot, Bidon, 1L) DOIT être extrait dans le champ 'packaging'. Si un produit existe en plusieurs tailles, génère plusieurs entrées distinctes. JSON: { "date_tarif": "...", "products": [ {"name": "...", "price": "...", "unit": "...", "packaging": "..."} ] }` 
-                            : `Analyse page ${i}. ${instructionPrix} IMPORTANT: 1. Astérisque (*) dans "name". 2. CRITIQUE : Extrais le conditionnement (ex: 25Kg, 5L, Sac, Pot) dans le champ 'packaging'. C'est ce qui différencie les produits. JSON produits uniquement: { "products": [ {"name": "...", "price": "...", "unit": "...", "packaging": "..."} ] }`;
-                        if (i > 1) await delay(1000);
+                            ? `Analyse page ${i}. Cherche date (format JJ/MM/AAAA) sinon "${filenameDate}". ${instructionPrix} IMPORTANT: 1. Si un produit a un astérisque (*) avant ou après son nom, GARDE-LE dans le champ "name". 2. CRITIQUE : Le conditionnement (ex: 25Kg, 5L, Sac, Pot, Bidon, 1L) DOIT être extrait dans le champ 'packaging'. Si un produit existe en plusieurs tailles, génère plusieurs entrées distinctes. Format JSON STRICT requis: { "date_tarif": "...", "products": [ {"name": "...", "price": 0.00, "unit": "...", "packaging": "..."} ] }` 
+                            : `Analyse page ${i}. ${instructionPrix} IMPORTANT: 1. Astérisque (*) dans "name". 2. CRITIQUE : Extrais le conditionnement (ex: 25Kg, 5L, Sac, Pot) dans le champ 'packaging'. C'est ce qui différencie les produits. Format JSON STRICT requis: { "products": [ {"name": "...", "price": 0.00, "unit": "...", "packaging": "..."} ] }`;
+                        
+                        if (i > 1) await delay(2500); // Pause plus longue entre les pages
+                        
                         try {
                             const result = await callIA({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: base64Img } } ] }], generationConfig: { responseMimeType: "application/json" } }, dbxConfig.geminiKey);
-                            const pageData = JSON.parse(extractJSON(result.candidates[0].content.parts[0].text));
+                            const textRaw = result.candidates[0].content.parts[0].text;
+                            const pageData = JSON.parse(extractJSON(textRaw));
+                            
                             if (i === 1 && pageData.date_tarif) extractedDate = pageData.date_tarif;
-                            if (pageData.products) allProducts = [...allProducts, ...pageData.products];
-                        } catch (pageErr) { }
+                            
+                            // Support robuste pour Array ou Object
+                            if (Array.isArray(pageData)) {
+                                allProducts = [...allProducts, ...pageData];
+                            } else if (pageData.products && Array.isArray(pageData.products)) {
+                                allProducts = [...allProducts, ...pageData.products];
+                            }
+                        } catch (pageErr) { 
+                            console.warn(`Erreur page ${i}:`, pageErr);
+                        }
                     }
                     return { date_tarif: extractedDate, products: allProducts };
-                } catch (e) { return { date_tarif: extractDateFromFilename(filename) || "Erreur", products: [] }; }
+                } catch (e) { 
+                    console.error("Erreur PDF:", e);
+                    return { date_tarif: extractDateFromFilename(filename) || "Erreur", products: [] }; 
+                }
             };
 
             const handleManualTarifUpload = async (e) => {
@@ -2299,6 +2321,7 @@
                             {/* SECURITY TAB */}
                             {activeTab === 'security' && currentUser.role === 'admin' && (
                                 <div className="max-w-4xl mx-auto space-y-8 animate-fade">
+                                    {/* ... Security Content ... */}
                                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                                         <h3 className="font-bold text-lg mb-6 flex items-center gap-2"><Icon name="Shield" /> Demandes d'autorisation ({(pendingRequests || []).length})</h3>
                                         {(!pendingRequests || pendingRequests.length === 0) ? (
